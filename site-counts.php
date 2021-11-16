@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Site Counts
  * Description: Post and term counts for your WordPress site.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: XWP
  * Author URI: https://github.com/xwp/site-counts
  * Text Domain: site-counts
