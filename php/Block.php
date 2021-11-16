@@ -46,83 +46,154 @@ class Block {
 	 * Registers the block.
 	 */
 	public function register_block() {
+
+		error_log( 'inside register_block start' );
+
 		register_block_type_from_metadata(
 			$this->plugin->dir(),
-			[
-				'render_callback' => [ $this, 'render_callback' ],
-			]
+				[
+						'render_callback' => [ $this, 'render_callback' ],
+				]
 		);
+
+		error_log( 'inside register_block end' );
 	}
+
 
 	/**
 	 * Renders the block.
+	 *
 	 *
 	 * @param array    $attributes The attributes for the block.
 	 * @param string   $content    The block content, if any.
 	 * @param WP_Block $block      The instance of this block.
 	 * @return string The markup of the block.
 	 */
-	public function render_callback( $attributes, $content, $block ) {
-		$post_types = get_post_types(  [ 'public' => true ] );
-		$class_name = $attributes['className'];
+	public function render_callback( array $attributes, string $content, WP_Block $block ): string {
+
+		$args = [
+			'public' => true,
+		];
+
+		$output = 'objects';
+
+		$post_type_objects = get_post_types( $args, $output );
+
+		$css_class_name = '';
+		if ( isset( $attributes['className'] ) ) {
+			$css_class_name = $attributes['className'];
+		}
+
 		ob_start();
 
 		?>
-        <div class="<?php echo $class_name; ?>">
-			<h2>Post Counts</h2>
+
+		<div class=" <?php echo esc_attr( $css_class_name ); ?>">
+			<h2><?php esc_html_e( 'Post Counts', 'site-counts' ); ?></h2>
 			<ul>
-			<?php
-			foreach ( $post_types as $post_type_slug ) :
-                $post_type_object = get_post_type_object( $post_type_slug  );
-                $post_count = count(
-                    get_posts(
-						[
-							'post_type' => $post_type_slug,
-							'posts_per_page' => -1,
-						]
-					)
-                );
+				<?php
 
-				?>
-				<li><?php echo 'There are ' . $post_count . ' ' .
-					  $post_type_object->labels->name . '.'; ?></li>
-			<?php endforeach;	?>
-			</ul><p><?php echo 'The current post ID is ' . $_GET['post_id'] . '.'; ?></p>
+				foreach ( $post_type_objects as $post ) :
 
-			<?php
-			$query = new WP_Query(  array(
-				'post_type' => ['post', 'page'],
-				'post_status' => 'any',
-				'date_query' => array(
-					array(
-						'hour'      => 9,
-						'compare'   => '>=',
-					),
-					array(
-						'hour' => 17,
-						'compare'=> '<=',
-					),
-				),
-                'tag'  => 'foo',
-                'category_name'  => 'baz',
-				  'post__not_in' => [ get_the_ID() ],
-			));
+					$post_count_transient_key = 'xwp_post_count_' . $post->name;
+					$post_count_per_type      = get_transient( $post_count_transient_key );
 
-			if ( $query->found_posts ) :
-				?>
-				 <h2>5 posts with the tag of foo and the category of baz</h2>
-                <ul>
-                <?php
+					if ( false === $post_count_per_type ) {
 
-                 foreach ( array_slice( $query->posts, 0, 5 ) as $post ) :
-                    ?><li><?php echo $post->post_title ?></li><?php
+						$args = [
+							'post_type'              => $post->name,
+							'update_post_meta_cache' => false,
+							'update_post_term_cache' => false,
+						];
+
+						if ( 'attachment' === $post->name ) {
+							$args['post_status'] = 'inherit';
+						}
+
+						$post_count_query = new WP_Query( $args );
+						$post_count       = $post_count_query->found_posts;
+
+						set_transient( $post_count_transient_key, $post_count, 31536000 );
+					}
+
+					$post_count = get_transient( $post_count_transient_key );
+					?>
+
+					<li>
+						<?php echo esc_html_x( 'There are ', 'site-counts', 'site-counts' ) . esc_html( $post_count ) . ' ' . esc_html( $post->labels->name ) . '.'; ?>
+					</li>
+
+					<?php
+
 				endforeach;
+				wp_reset_postdata();
+				?>
+
+			</ul>
+
+			<p>
+				<?php
+				/* translators: current post ID */
+				echo sprintf( esc_html_x( 'The current post ID is %d.', 'Current post ID', 'site-counts' ), get_the_ID() );
+				?>
+			</p>
+
+			<?php
+
+			$posts_to_exclude = [ get_the_ID() ];
+
+			$recent_posts = new WP_Query(
+				[
+					'posts_per_page'         => 6,
+					'post_type'              => [ 'post', 'page' ],
+					'post_status'            => 'publish',
+					'date_query'             => [
+						[
+							'hour'    => 9,
+							'compare' => '>=',
+						],
+						[
+							'hour'    => 17,
+							'compare' => '<=',
+						],
+					],
+					'tag'                    => 'foo',
+					'category_name'          => 'baz',
+					'update_post_meta_cache' => false,
+					'include_children'       => false,
+				]
+			);
+
+			if ( $recent_posts->found_posts ) :
+				?>
+			<h2><?php esc_html_e( '5 posts with the tag of foo and the category of baz', 'site-counts' ); ?></h2>
+			<ul>
+
+				<?php
+
+				$posts = 0;
+
+				while ( $recent_posts->have_posts() && $posts < 5 ) :
+
+					$recent_posts->the_post();
+
+					$current = get_the_ID();
+					if ( ! in_array( $current, $posts_to_exclude, true ) ) {
+						$posts ++;
+						the_title( '<li><a href="' . get_permalink() . '">', '</a></li>' );
+					}
+
+				endwhile;
+
 			endif;
-		 	?>
+
+			?>
 			</ul>
 		</div>
+
 		<?php
 
+		wp_reset_postdata();
 		return ob_get_clean();
 	}
 }
