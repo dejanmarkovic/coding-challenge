@@ -90,7 +90,7 @@ class Block {
 				</ul>
 			<?php endif; ?>
 			
-			<p><?php echo 'The current post ID is ' . get_the_ID() . '.'; ?></p>
+			<p><?php _e( 'The current ' . get_post_type( get_the_ID() ) . ' ID is ' . get_the_ID() . '.', 'site-counts' ); ?></p>
 
 			<?php
 			$query = new WP_Query( array(
@@ -118,8 +118,9 @@ class Block {
 			));
 
 			if ( $query->have_posts() ) :
+				$count_posts = $query->found_posts;
 				?>
-				<h2><?php _e( '5 posts with the tag of foo and the category of baz', 'site-counts' ); ?></h2>
+				<h2><?php _e( $count_posts.' posts with the tag of foo and the category of baz', 'site-counts' ); ?></h2>
 				<ul>
 				<?php
 				while ( $query->have_posts() ) :
